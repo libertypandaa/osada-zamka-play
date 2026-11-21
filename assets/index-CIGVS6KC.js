@@ -32,7 +32,7 @@
     // The old stylesheet may also have survived in cache. Remove it only after
     // the current stylesheet is ready, so it cannot override the new shell.
     for(const link of doc.querySelectorAll('link[rel="stylesheet"]')){
-      if(link!==stylesheet&&new URL(link.href,base).pathname===new URL('assets/index-LPhG8MAj.css',base).pathname)link.remove();
+      if(link!==stylesheet&&['assets/index-LPhG8MAj.css','assets/index-sqpJNCZV.css'].some(old=>new URL(link.href,base).pathname===new URL(old,base).pathname)&&link.href!==stylesheet.href)link.remove();
     }
     await deadline(options.load(new URL(entry.entry,base).href));
     return true;
