@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#153430">
+  <title>Осада замка</title>
+  <style>
+    html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#153430}
+    #unity-container{position:fixed;inset:0;width:100%;height:100%;height:100dvh}
+    #unity-canvas{display:block;width:100%;height:100%;outline:0;touch-action:none}
+  </style>
+</head>
+<body>
+  <div id="unity-container"><canvas id="unity-canvas" tabindex="-1" aria-label="Осада замка"></canvas></div>
+  <script>
+    const canvas=document.getElementById('unity-canvas');
+    canvas.width=Math.round(innerWidth*(devicePixelRatio||1));
+    canvas.height=Math.round(innerHeight*(devicePixelRatio||1));
+    canvas.addEventListener('contextmenu',event=>event.preventDefault());
+    const buildUrl='Build';
+    const config={dataUrl:buildUrl+'/Web.data',frameworkUrl:buildUrl+'/Web.framework.js',codeUrl:buildUrl+'/Web.wasm',streamingAssetsUrl:'StreamingAssets',companyName:'CastleSiege',productName:'Осада замка',productVersion:'0.25.4-unity.4',devicePixelRatio:devicePixelRatio||1,matchWebGLToCanvasSize:true};
+    const script=document.createElement('script');
+    script.src=buildUrl+'/Web.loader.js';
+    script.onload=()=>createUnityInstance(canvas,config).then(instance=>{window.unityInstance=instance;}).catch(error=>console.error('Unity startup failed',error));
+    script.onerror=()=>console.error('Unity loader failed');
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>
