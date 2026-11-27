@@ -48,8 +48,8 @@
       const raw=Number(window.devicePixelRatio),display=Number.isFinite(raw)&&raw>0?raw:1;
       return Math.max(1,Math.min(display,2,Math.sqrt(2073600/(width*height))));
     }
-    const buildUrl='releases/daf4d3f843c111ec6e0ddd56f8b624f07afe7d17428c35b45edb2bbfc8248245/Build';
-    const config={dataUrl:buildUrl+'/Web.data',frameworkUrl:buildUrl+'/Web.framework.js',codeUrl:buildUrl+'/Web.wasm',streamingAssetsUrl:'releases/daf4d3f843c111ec6e0ddd56f8b624f07afe7d17428c35b45edb2bbfc8248245/StreamingAssets',companyName:'CastleSiege',productName:'Осада замка',productVersion:'0.25.4-unity.4',devicePixelRatio:renderRatio(),matchWebGLToCanvasSize:true};
+    const buildUrl='releases/d09f1298d8d2f1e0873f5a5e8f2fe4c0b8be71fd5e6b85d6cfc5b98254a29f1e/Build';
+    const config={dataUrl:buildUrl+'/Web.data',frameworkUrl:buildUrl+'/Web.framework.js',codeUrl:buildUrl+'/Web.wasm',streamingAssetsUrl:'releases/d09f1298d8d2f1e0873f5a5e8f2fe4c0b8be71fd5e6b85d6cfc5b98254a29f1e/StreamingAssets',companyName:'CastleSiege',productName:'Осада замка',productVersion:'0.25.4-unity.5',devicePixelRatio:renderRatio(),matchWebGLToCanvasSize:true};
     function resizePolicy() {
       config.devicePixelRatio=renderRatio();state.renderDpr=config.devicePixelRatio;state.displayDpr=Number(window.devicePixelRatio)||1;
       if(instance&&instance.Module)instance.Module.devicePixelRatio=config.devicePixelRatio;
