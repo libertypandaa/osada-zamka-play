@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#153430">
+  <title>Осада замка</title>
+  <style>
+    html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#153430;color:#fff4d6;font-family:Georgia,serif}
+    #unity-container{position:fixed;inset:0;width:100%;height:100%;height:100dvh}
+    #unity-container:fullscreen{width:100vw;height:100vh;background:#153430}
+    #unity-container:-webkit-full-screen{width:100vw;height:100vh;background:#153430}
+    #unity-canvas{display:block;width:100%;height:100%;outline:0;touch-action:none}
+    [hidden]{display:none!important}
+    #startup{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:24px;box-sizing:border-box;background:#153430;overflow:auto}
+    #startup-card{width:min(100%,440px);margin:auto}
+    h1{font-size:clamp(26px,5vw,38px);margin:0 0 22px}p{line-height:1.5;margin:12px 0}
+    #startup-hint{color:#d2d9bd;font:15px/1.5 system-ui,sans-serif}
+    progress{display:block;width:100%;height:16px;margin:20px 0;accent-color:#b29a6a}
+    button{min-height:44px;padding:10px 18px;border:1px solid #b29a6a;background:#253128;color:#fff4d6;font:17px Georgia,serif;cursor:pointer}
+    button:focus-visible,summary:focus-visible{outline:3px solid #86d5bc;outline-offset:3px}
+    details{font:13px/1.4 system-ui,sans-serif;margin-top:18px}summary{cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere}
+  </style>
+</head>
+<body>
+  <div id="unity-container"><canvas id="unity-canvas" tabindex="-1" aria-label="Осада замка"></canvas>
+  <section id="startup" aria-label="Запуск игры" aria-busy="true">
+    <div id="startup-card">
+      <h1>Осада замка</h1>
+      <p id="startup-status" role="status" aria-live="polite">Подключаем загрузчик…</p>
+      <progress id="startup-progress" max="1" aria-label="Загрузка игры"></progress>
+      <p id="startup-hint">Первый запуск загружает около 70 МБ. Дождитесь появления игры.</p>
+      <button id="startup-retry" type="button" hidden>Попробовать ещё раз</button>
+      <details id="startup-details" hidden><summary>Подробности ошибки</summary><pre id="startup-error"></pre></details>
+      <noscript><p>Для запуска игры включите JavaScript в браузере.</p></noscript>
+    </div>
+  </section>
+  </div>
+  <script>
+  (function () {
+    'use strict';
+    const canvas=document.getElementById('unity-canvas'),overlay=document.getElementById('startup'),container=document.getElementById('unity-container');
+    const status=document.getElementById('startup-status'),progress=document.getElementById('startup-progress');
+    const hint=document.getElementById('startup-hint'),retry=document.getElementById('startup-retry');
+    const details=document.getElementById('startup-details'),errorText=document.getElementById('startup-error');
+    const state=window.castleStartup={revision:'startup-html-001',phase:'loader',progress:null,errorCode:null};
+    let failed=false,ready=false,instance=null;
+    // The shipped UI bridge reads actual canvas.width / CSS width. Keep its minimum DPR1.
+    function renderRatio() {
+      const width=Math.max(1,Number(window.innerWidth)||1),height=Math.max(1,Number(window.innerHeight)||1);
+      const raw=Number(window.devicePixelRatio),display=Number.isFinite(raw)&&raw>0?raw:1;
+      return Math.max(1,Math.min(display,2,Math.sqrt(2073600/(width*height))));
+    }
+    const buildUrl='Build';
+    const config={dataUrl:buildUrl+'/Web.data',frameworkUrl:buildUrl+'/Web.framework.js',codeUrl:buildUrl+'/Web.wasm',streamingAssetsUrl:'StreamingAssets',companyName:'CastleSiege',productName:'Осада замка',productVersion:'0.25.4-unity.15',devicePixelRatio:renderRatio(),matchWebGLToCanvasSize:true};
+    function resizePolicy() {
+      config.devicePixelRatio=renderRatio();state.renderDpr=config.devicePixelRatio;state.displayDpr=Number(window.devicePixelRatio)||1;
+      if(instance&&instance.Module)instance.Module.devicePixelRatio=config.devicePixelRatio;
+      else if(!ready){canvas.width=Math.round(Math.max(1,window.innerWidth)*config.devicePixelRatio);canvas.height=Math.round(Math.max(1,window.innerHeight)*config.devicePixelRatio);}
+    }
+    resizePolicy();window.addEventListener('resize',resizePolicy);window.addEventListener('orientationchange',resizePolicy);
+    if(window.visualViewport)window.visualViewport.addEventListener('resize',resizePolicy);
+    if(window.screen&&screen.orientation&&screen.orientation.addEventListener)screen.orientation.addEventListener('change',resizePolicy);
+    // The first ready landscape tap includes the Unity-rendered Start button.
+    // Request here, synchronously in the trusted DOM gesture, before C#'s next
+    // frame. Rotation/resize never initiates fullscreen and input is not stopped.
+    const fullscreenState={revision:'fullscreen-html-001',phase:'armed',attempts:0,autoAttempted:false,optOut:false,active:false,lastError:''};
+    let fullscreenPending=false,wasFullscreen=false;
+    function fullscreenElement(){return document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement||null;}
+    function fullscreenChanged(){
+      const element=fullscreenElement();fullscreenState.active=!!element;
+      if(element){wasFullscreen=true;fullscreenState.phase='active';}
+      else if(wasFullscreen){fullscreenState.optOut=true;fullscreenState.autoAttempted=true;fullscreenState.phase='exited';wasFullscreen=false;}
+      resizePolicy();requestAnimationFrame(resizePolicy);
+    }
+    function enterFullscreen(explicit){
+      if(fullscreenElement())return Promise.resolve(true);
+      if(fullscreenPending||(!explicit&&(fullscreenState.autoAttempted||fullscreenState.optOut)))return Promise.resolve(false);
+      if(!explicit&&window.innerWidth<window.innerHeight)return Promise.resolve(false);
+      if(navigator.userActivation&&navigator.userActivation.isActive===false)return Promise.resolve(false);
+      const standard=container.requestFullscreen,request=standard||container.webkitRequestFullscreen||container.webkitRequestFullScreen||container.mozRequestFullScreen||container.msRequestFullscreen;
+      fullscreenState.autoAttempted=true;
+      if(!request){fullscreenState.phase='unsupported';return Promise.resolve(false);}
+      fullscreenPending=true;fullscreenState.phase='requesting';fullscreenState.attempts++;
+      function rejected(reason){fullscreenPending=false;fullscreenState.phase='denied';fullscreenState.lastError=String(reason&&reason.name||reason||'denied').slice(0,160);return false;}
+      try{
+        // Do not move this call into a promise, timer or Unity callback.
+        const task=standard?request.call(container,{navigationUI:'hide'}):request.call(container);
+        return Promise.resolve(task).then(()=>{fullscreenPending=false;fullscreenChanged();if(!fullscreenElement())fullscreenState.phase='requested';return true;},rejected);
+      }catch(reason){return Promise.resolve(rejected(reason));}
+    }
+    function leaveFullscreen(){
+      fullscreenState.optOut=true;fullscreenState.autoAttempted=true;
+      const leave=document.exitFullscreen||document.webkitExitFullscreen||document.webkitCancelFullScreen||document.mozCancelFullScreen||document.msExitFullscreen;
+      if(!fullscreenElement()||!leave)return Promise.resolve(false);
+      try{return Promise.resolve(leave.call(document)).then(()=>{fullscreenChanged();return true;},()=>false);}catch(_){return Promise.resolve(false);}
+    }
+    window.castleFullscreen={state:fullscreenState,request:()=>enterFullscreen(true),leave:leaveFullscreen,toggle:()=>fullscreenElement()?leaveFullscreen():enterFullscreen(true)};
+    function startGesture(event){
+      if(event.isTrusted!==true||!ready||failed||event.target!==canvas||event.isPrimary===false||event.button>0)return;
+      if(event.type==='keydown'&&event.key!=='Enter'&&event.key!==' ')return;
+      enterFullscreen(false);
+    }
+    if(window.PointerEvent)document.addEventListener('pointerup',startGesture,{capture:true,passive:true});
+    else{document.addEventListener('touchend',startGesture,{capture:true,passive:true});document.addEventListener('mouseup',startGesture,{capture:true,passive:true});}
+    document.addEventListener('keydown',startGesture,{capture:true});
+    for(const name of ['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange'])document.addEventListener(name,fullscreenChanged);
+    canvas.addEventListener('contextmenu',event=>event.preventDefault());
+    function errorCode(reason) {
+      const value=String(reason||'');
+      if(/out of memory|cannot enlarge memory|could not allocate|invalid (?:array buffer|typed array) length/i.test(value))return 'MEMORY';
+      if(/webgl|graphics|gpu|context (?:lost|creation)/i.test(value))return 'GRAPHICS';
+      if(/webassembly|wasm2023|browser.*support|not supported/i.test(value))return 'BROWSER';
+      if(/load file|download|fetch|network|failed to load/i.test(value))return 'NETWORK';
+      return 'STARTUP';
+    }
+    function fail(code,reason) {
+      if(failed)return;failed=true;ready=false;clearTimeout(slowNotice);
+      state.phase='error';state.errorCode=code;state.error=String(reason||code).slice(0,2000);
+      overlay.hidden=false;overlay.setAttribute('aria-busy','false');progress.hidden=true;retry.hidden=false;details.hidden=false;
+      status.textContent='Не удалось запустить игру';
+      const messages={MEMORY:'Браузеру не хватило памяти. Закройте другие вкладки и попробуйте ещё раз.',GRAPHICS:'Браузер не смог запустить графику WebGL 2. Попробуйте открыть ссылку в обновлённом браузере.',BROWSER:'Этот браузер не поддерживает необходимые возможности игры. Обновите его или откройте ссылку в другом браузере.',NETWORK:'Не удалось загрузить файлы игры. Проверьте подключение и попробуйте ещё раз.',LOADER_NETWORK:'Не удалось подключить загрузчик игры. Проверьте подключение и попробуйте ещё раз.',STARTUP:'Во время запуска произошла ошибка. Попробуйте перезагрузить игру.',CONTEXT_LOST:'Браузер прервал работу графики. Попробуйте перезагрузить игру.'};
+      hint.textContent=messages[code]||messages.STARTUP;errorText.textContent='Код: '+code+'\n'+state.error;
+      console.error('CASTLE_BOOT_ERROR',code,state.error);
+    }
+    const slowNotice=setTimeout(()=>{if(!failed&&!ready)hint.textContent='Первый запуск может занять несколько минут на медленном соединении. Загрузка продолжается; не закрывайте страницу.';},15000);
+    retry.addEventListener('click',()=>window.location.reload());
+    canvas.addEventListener('webglcontextcreationerror',event=>fail('GRAPHICS',event.statusMessage||'WebGL context creation failed'));
+    canvas.addEventListener('webglcontextlost',()=>fail('CONTEXT_LOST','WebGL context lost'));
+    config.showBanner=(message,type)=>{if(type==='error')fail(errorCode(message),message);else console.warn('Unity',message);};
+    config.errorHandler=(message)=>{fail(errorCode(message),message);return true;};
+    function onProgress(value) {
+      if(failed||ready||!Number.isFinite(value))return;
+      const amount=Math.min(1,Math.max(0,value));state.progress=amount;
+      if(amount<1){state.phase='download';progress.value=amount;status.textContent='Загрузка игры: '+Math.floor(amount*100)+' %';}
+      else{state.phase='initializing';progress.removeAttribute('value');status.textContent='Файлы загружены. Запускаем игру…';}
+    }
+    // Unity performs its own graphics check; this wrapper allocates no probe context.
+    if(typeof WebAssembly==='undefined'||typeof WebAssembly.validate!=='function'){fail('BROWSER','WebAssembly unavailable');return;}
+    if(typeof window.WebGL2RenderingContext==='undefined'){fail('GRAPHICS','WebGL 2 API unavailable');return;}
+    const script=document.createElement('script');script.src=buildUrl+'/Web.loader.js';
+    script.onerror=()=>fail('LOADER_NETWORK',script.src);
+    script.onload=function () {
+      if(failed)return;state.phase='download';status.textContent='Загружаем файлы игры…';
+      try {
+        Promise.resolve(createUnityInstance(canvas,config,onProgress)).then(function (loaded) {
+          instance=loaded;window.unityInstance=loaded;if(failed)return;resizePolicy();
+          state.phase='initializing';status.textContent='Игра загружена. Открываем первый экран…';
+          requestAnimationFrame(()=>requestAnimationFrame(()=>{if(failed)return;ready=true;clearTimeout(slowNotice);state.phase='ready';overlay.setAttribute('aria-busy','false');overlay.hidden=true;}));
+        }).catch(reason=>fail(errorCode(reason),reason));
+      } catch(reason){fail(errorCode(reason),reason);}
+    };
+    document.body.appendChild(script);
+  }());
+  </script>
+</body>
+</html>
